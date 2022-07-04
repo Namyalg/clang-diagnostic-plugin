@@ -6,6 +6,10 @@ int main() {
 	
 	int* ptr = (int *)malloc(10);
 	p = (char *)malloc(10);
-	*p = 'a';
+	if(p != nullptr){
+		*p = 'a';
+	}
+	
+	*ptr = 3;
 	return 0;
 }
