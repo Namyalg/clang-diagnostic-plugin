@@ -221,4 +221,4 @@ protected:
 	}
 };
 
-static FrontendPluginRegistry::Add<CheckMallocAction> CheckMalloc("CheckMalloc", "Warn against underscores in function and variable names");
+static FrontendPluginRegistry::Add<CheckMallocAction> CheckMalloc("CheckMalloc", "Warn against unchecked usage of return from malloc");
