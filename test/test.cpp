@@ -8,6 +8,5 @@ int main() {
 	if(p != nullptr){
 		*p = 'a';	
 	}
-	*ptr = 120;
 	return 0;
 }
