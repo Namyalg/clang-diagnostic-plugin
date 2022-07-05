@@ -6,6 +6,7 @@ int main() {
 	int* ptr = (int *)malloc(10);
 	p = (char *)malloc(10);
 	
+
 	if(p != nullptr){
 		*p = 'a';	
 	}
