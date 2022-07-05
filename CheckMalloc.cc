@@ -45,7 +45,8 @@ private:
 
 	DiagnosticsEngine& d;
 	unsigned int count = 0;
-	unsigned int warningID;
+	unsigned int noCheck;
+	unsigned int notInIf;
 
 	void getCount(){
 		count += 1;
@@ -103,8 +104,12 @@ private:
 	public:
 	explicit CheckMallocVisitor(ASTContext *context, CompilerInstance& instance): 
 			context(context), instance(instance), d(instance.getDiagnostics()) {
-		warningID = d.getCustomDiagID(DiagnosticsEngine::Warning,
+	
+		noCheck = d.getCustomDiagID(DiagnosticsEngine::Warning,
 				"Pointer not checked for null return from malloc : '%0'");
+		
+		notInIf = d.getCustomDiagID(DiagnosticsEngine::Warning,
+				"Pointer assignment not done in if block : '%0'");
 	}
 
 
@@ -112,15 +117,12 @@ private:
 		if (isInHeaderStmt(s)) {
 			return true;
 		}
-		//getCount();
+		getCount();
 		for (auto decl : s->decls()) {
 			if (auto var = dyn_cast<VarDecl>(decl)) {
-				//llvm :: errs() << "var : " << var->getNameAsString() << "\n";
 				varCountMap[var->getNameAsString()] = count;
 			}
 		}
-		// cout << "ALL VARS GOT " << "\n";
-		// printVars();
 		return true;
 	}
 
@@ -182,7 +184,7 @@ private:
 
 		if(s->isAssignmentOp()){
 			//cout << "IN ASSSIGNMENT OP" << "\n";
-			// auto loc = context->getFullLoc(s->getExprLoc());
+			auto loc = context->getFullLoc(s->getExprLoc());
 			// auto l = s->getExprLoc();
 			string s1 = s->getExprLoc().printToString(context->getSourceManager());
 			int assignmentPos = getCol(s1);
@@ -195,29 +197,33 @@ private:
 			// check if it is done here, the checking, i.e this is where the assignment and checking happens
 			if(mallocVars.find(LHS) != mallocVars.end()){ // && ifVars[LHS].first <= s1 <= ifVars[LHS].second)
 				 //There is no if check -> being used 
-						cout << "LOCATION of assignment is " << s1 << " " << assignmentPos << "\n";
-						//d.Report(loc, warningID) << LHS;
-
+				if(mallocVars[LHS] == 0){
+					d.Report(loc, noCheck) << LHS; 
+					return true;
+				}
+				else if (mallocVars[LHS] == 1){
+					if(mallocIfs.find(LHS) != mallocIfs.end()){
+						if(mallocIfs[LHS].first <= assignmentPos && assignmentPos <= mallocIfs[LHS].second){
+							mallocVars[LHS] = 2;
+							return true;
+						}
+						else if(mallocIfs[LHS].first > assignmentPos || assignmentPos >  mallocIfs[LHS].second){
+							d.Report(loc, notInIf) << LHS;
+							return true;
+						}
+					}
+				}
+					
 						//set it to 2  or fine 
 						// if within the range and previous is 1, then fine
 						// if previous is 0 then no if, raise not checked error
 						 //if not within range raise not assigned in if block 
+					
 				}
 			} 
 		
 		return true;
 	}
-
-	// virtual bool VisitCompoundStmt(CompoundStmt *s) {
-	// 	if(isInHeaderStmt(s)) {
-	// 		return true;
-	// 	}
-	// 	//cout << "COMPOUND STMT ";
-	// 	getCount();
-	// 	auto loc = context->getFullLoc(s->getEndLoc());
-	// 	//d.Report(loc, warningID) << " compound ";
-	// 	return true;
-	// }
 
     virtual bool VisitIfStmt(IfStmt *s) {
         if(isInHeaderStmt(s)){
@@ -226,8 +232,8 @@ private:
 
 		//cout << "***************** IN THE IF STMT ********************** " << "count is : ";
 		getCount();
+		pair<int, int> pos;
 		string ifstmt = convertExpressionToString(s->getCond());
-	
 		string start = s->getBeginLoc().printToString(context->getSourceManager());
 		string end = s->getEndLoc().printToString(context->getSourceManager());
 
@@ -236,47 +242,19 @@ private:
 
 		int startPos = getCol(start);
 		int endPos = getCol(end);
-
-		// string conditionVariable = s->getConditionVariable()->getNameAsString();
 		for(auto x : s->children()){	
 			if(string(x->getStmtClassName()) == "BinaryOperator"){
 				BinaryOperator *b = dyn_cast<BinaryOperator>(x);
-				cout << "IN THE BINARY OPERATOR " << "\n";
-					
-						string LHS = removePointer(convertExpressionToString(b->getLHS()));
-						string RHS = removePointer(convertExpressionToString(b->getRHS()));
-						cout << "LHS " << LHS << " RHS " << RHS << "\n\n";
-						pair<int, int> pos;
-						
-						if(b->isEqualityOp() && mallocVars.find(LHS) != mallocVars.end() && RHS == "nullptr"){
-							cout << "START POS " << startPos << " END POS " << endPos << "\n";
-							
-							mallocVars[LHS] = 1;
-							pos = make_pair(startPos, endPos); 
-							mallocIfs[LHS] = pos;
-						}
-				// for(auto child : b->children()){
-				// 	cout << string(child->getStmtClassName()) << "\n";
-				// 	if(string(child->getStmtClassName()) == "BinaryOperator"){
-				// 		cout << "IN THE BINARY OPERATOR " << "\n";
-				// 		BinaryOperator *b1 = dyn_cast<BinaryOperator>(child);
-				// 		string LHS = removePointer(convertExpressionToString(b1->getLHS()));
-				// 		string RHS = removePointer(convertExpressionToString(b1->getRHS()));
-				// 		cout << "LHS " << LHS << " RHS " << RHS << "\n\n";
-				// 		pair<int, int> pos;
-						
-				// 		if(b1->isEqualityOp() && mallocVars.find(LHS) != mallocVars.end() && RHS == "nullptr"){
-				// 			cout << "START POS " << startPos << " END POS " << endPos << "\n";
-							
-				// 			mallocVars[LHS] = 1;
-				// 			pos = make_pair(startPos, endPos); 
-				// 			mallocIfs[LHS] = pos;
-				// 		}
-				// 	}
-				// }
+				string LHS = removePointer(convertExpressionToString(b->getLHS()));
+				string RHS = removePointer(convertExpressionToString(b->getRHS()));
+				if(b->isEqualityOp() && mallocVars.find(LHS) != mallocVars.end() && RHS == "nullptr"){
+					//cout << "START POS " << startPos << " END POS " << endPos << "\n";
+					mallocVars[LHS] = 1;
+					pos = make_pair(startPos, endPos); 
+					mallocIfs[LHS] = pos;
+				}
 			}
 		}
-		printAllIfs();
 		return true;
 	}
 
