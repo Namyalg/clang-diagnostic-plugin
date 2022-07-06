@@ -5,8 +5,7 @@ int main() {
 	int a;
 	int* ptr = (int *)malloc(10);
 	p = (char *)malloc(10);
-	if(p != nullptr){
-		*p = 'a';	
-	}
+	
+	*p = 'a';	
 	return 0;
 }

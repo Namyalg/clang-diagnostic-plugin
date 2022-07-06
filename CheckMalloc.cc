@@ -172,23 +172,10 @@ private:
 		string LHS = removePointer(convertExpressionToString(s->getLHS()));
 		string RHS = removePointer(convertExpressionToString(s->getRHS()));
 
-		
-		// cout << "LHS of binary op " << LHS << "\n";
-		// cout << "RHS of binary op " << RHS << "\n\n";
-		// if(s->isEqualityOp()){	
-		// 	if(RHS =="nullptr" && mallocVars.find(LHS) != mallocVars.end()){ // is present
-		// 	//cout << "THIS IS A MALLOC var " << LHS << "\n";
-		// 		mallocVars[LHS] = true;
-		// 	}
-		// }
-
 		if(s->isAssignmentOp()){
-			//cout << "IN ASSSIGNMENT OP" << "\n";
 			auto loc = context->getFullLoc(s->getExprLoc());
-			// auto l = s->getExprLoc();
 			string s1 = s->getExprLoc().printToString(context->getSourceManager());
 			int assignmentPos = getCol(s1);
-
 			if (RHS.find("malloc") != std::string::npos) {
 				mallocVars[LHS] = 0;
 				return true;
