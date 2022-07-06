@@ -72,7 +72,7 @@ private:
 	}
 
 	void printMallocVars(){
-		//cout << "\n MALLOC VARS " << "\n";
+		cout << "\n MALLOC VARS " << "\n";
 		for(auto x : mallocVars){
 			cout << x.first << " " << x.second << "\n";
 		}
@@ -163,14 +163,25 @@ private:
 		return true;
 	}
     
+	string getVarName(string var){
+		int index = 0;
+		string allow = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789";
+		while(index < var.length() && allow.find(var[index]) != string::npos){
+			index += 1;
+		}
+		return var.substr(0, index);
+	}
+
     virtual bool VisitBinaryOperator(BinaryOperator *s) {
 		if(isInHeaderStmt(s)){
             return true;
         }
 		getCount();
         //cout << "-------- IN THE BINARY OPERATOR --------" << "\n";
-		string LHS = removePointer(convertExpressionToString(s->getLHS()));
+		string LHS = getVarName(removePointer(convertExpressionToString(s->getLHS())));
 		string RHS = removePointer(convertExpressionToString(s->getRHS()));
+
+		//printMallocVars();
 
 		if(s->isAssignmentOp()){
 			auto loc = context->getFullLoc(s->getExprLoc());
@@ -232,7 +243,7 @@ private:
 		for(auto x : s->children()){	
 			if(string(x->getStmtClassName()) == "BinaryOperator"){
 				BinaryOperator *b = dyn_cast<BinaryOperator>(x);
-				string LHS = removePointer(convertExpressionToString(b->getLHS()));
+				string LHS = getVarName(removePointer(convertExpressionToString(b->getLHS())));
 				string RHS = removePointer(convertExpressionToString(b->getRHS()));
 				if(b->isEqualityOp() && mallocVars.find(LHS) != mallocVars.end() && RHS == "nullptr"){
 					//cout << "START POS " << startPos << " END POS " << endPos << "\n";
