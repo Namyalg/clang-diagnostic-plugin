@@ -156,7 +156,7 @@ private:
 		if(isInHeaderStmt(E)) {
 			return true;
 		}
-		//getCount();
+		getCount();
 		//cout << "CSTYLE CAST EXPR " << count << "\n";
 		string RHS = convertExpressionToString(E);
 		//cout << RHS << '\n';
@@ -169,6 +169,8 @@ private:
 		while(index < var.length() && allow.find(var[index]) != string::npos){
 			index += 1;
 		}
+		string h =  var.substr(0, index);
+		//cout << h << " " << h.size() << "\n";
 		return var.substr(0, index);
 	}
 
@@ -179,6 +181,8 @@ private:
 		getCount();
         //cout << "-------- IN THE BINARY OPERATOR --------" << "\n";
 		string LHS = getVarName(removePointer(convertExpressionToString(s->getLHS())));
+		//cout << "LHS is " << LHS << "\n";
+
 		string RHS = removePointer(convertExpressionToString(s->getRHS()));
 
 		//printMallocVars();
@@ -194,7 +198,8 @@ private:
 			 
 			// check if it is done here, the checking, i.e this is where the assignment and checking happens
 			if(mallocVars.find(LHS) != mallocVars.end()){ // && ifVars[LHS].first <= s1 <= ifVars[LHS].second)
-				 //There is no if check -> being used 
+				 //There is no if check -> being used
+				//cout << "DEBUG	 in malloc vars " << LHS << " " << mallocVars[LHS] << "\n"; 
 				if(mallocVars[LHS] == 0){
 					d.Report(loc, noCheck) << LHS; 
 					return true;
