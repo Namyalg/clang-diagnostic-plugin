@@ -3,10 +3,11 @@
 int main() {
 
 	// -------------- POINTER TO A PRIMITIVE - Type : Declaration -----------------------
-	int *var = (int *)malloc(4);
+	float *var = (float *)malloc(4);
+	*var = 10;
 	if(var != nullptr){
 		
 	}
-	*var = 10;
+	
 	return 0;
 }
