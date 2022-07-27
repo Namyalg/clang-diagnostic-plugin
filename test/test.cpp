@@ -10,12 +10,15 @@ int main() {
 	int* ptr = (int *)malloc(4);
 	int *var = (int *)malloc(4);
 
-	*var = 10;
-
+	if(var != nullptr){
+		*var = 10;
+	}
+	
+	
 	// ARRAY
 	if(ptr != nullptr){
 		for (int i = 0; i < 5; i++) {
-    		ptr[i] = i * 2 + 1;
+    		ptr[i] = i * 2;
   		}	
 	}
 
@@ -26,19 +29,18 @@ int main() {
 	struct c* m;
 
 	p = (char *)malloc(2);
+	
 	if(p != nullptr){
-		
+		*p = '0';	
 	}
-
-	*p = '0';
+	
+	
+	
 
 	m = (struct c*)malloc(sizeof(struct c));
-	
 	if(m != nullptr){
-	m->c = 0;	
+		m->c = 0;		
 	}
 	
-	
-
 	return 0;
 }
