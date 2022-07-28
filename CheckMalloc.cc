@@ -18,13 +18,18 @@ using namespace std;
 
 class CheckMallocVisitor : public RecursiveASTVisitor<CheckMallocVisitor> {
 private:
+
+	// maintains a context to the AST
 	ASTContext *context;
 	CompilerInstance& instance;
 	
-	// To get the variables which are malloc 
+	// Map to track all the variables, variable name : global counter
 	unordered_map<string, int> varCountMap;
+
+	// Map to track the malloc variables, variable name : boolean (if malloc or not)
 	unordered_map<string, int> mallocVars;
 
+	// Map to track the start and end line of the if blocks
 	unordered_map<string, pair<int, int>> mallocIfs;
 
 	/**
@@ -40,10 +45,9 @@ private:
 
 	// To get ifs and check for null return from malloc
 
-	
-	
-
 	DiagnosticsEngine& d;
+
+	// global counter
 	unsigned int count = 0;
 	unsigned int noCheck;
 	unsigned int notInIf;
@@ -53,6 +57,7 @@ private:
 		//cout << "count: " << count << endl;
 	}
 
+	// Debug functions
 	void printVars(){
 		for(auto x : varCountMap){
 			cout << x.first << " " << x.second << "\n";
@@ -65,12 +70,6 @@ private:
 		}
 	}
 
-	std::string removePointer(std::string str)
-	{
-		str.erase(remove(str.begin(), str.end(), '*'), str.end());
-		return str;
-	}
-
 	void printMallocVars(){
 		cout << "\n MALLOC VARS " << "\n";
 		for(auto x : mallocVars){
@@ -78,55 +77,13 @@ private:
 		}
 	}
 
-	bool isInHeaderDecl(Decl *decl) {
-		auto loc = decl->getLocation();
-		auto floc = context->getFullLoc(loc);
-		if (floc.isInSystemHeader()) return true;
-		auto entry = floc.getFileEntry()->getName();
-		if (entry.endswith(".h") || entry.endswith(".hpp")) {
-			return true;
-		}
-		return false;
+	std::string removePointer(std::string str)
+	{
+		str.erase(remove(str.begin(), str.end(), '*'), str.end());
+		return str;
 	}
 
-
-    bool isInHeaderStmt(Stmt* stmt) {
-		auto loc = stmt->getBeginLoc();
-		auto floc = context->getFullLoc(loc);
-		if (floc.isInSystemHeader()) return true;
-		auto entry = floc.getFileEntry()->getName();
-		if (entry.endswith(".h") || entry.endswith(".hpp")) {
-			return true;
-		}
-		return false;
-	}
-
-	public:
-	explicit CheckMallocVisitor(ASTContext *context, CompilerInstance& instance): 
-			context(context), instance(instance), d(instance.getDiagnostics()) {
-	
-		noCheck = d.getCustomDiagID(DiagnosticsEngine::Warning,
-				"Pointer not checked for null return from malloc : '%0'");
-		
-		notInIf = d.getCustomDiagID(DiagnosticsEngine::Warning,
-				"Pointer assignment not done in if block : '%0'");
-	}
-
-
-	virtual bool VisitDeclStmt(DeclStmt *s) {
-		if (isInHeaderStmt(s)) {
-			return true;
-		}
-		getCount();
-		for (auto decl : s->decls()) {
-			if (auto var = dyn_cast<VarDecl>(decl)) {
-				varCountMap[var->getNameAsString()] = count;
-			}
-		}
-		return true;
-	}
-
-    std::string convertExpressionToString(Expr *E) {
+	std::string convertExpressionToString(Expr *E) {
 		SourceManager &SM = context->getSourceManager();
 		clang::LangOptions lopt;
 		SourceLocation startLoc = E->getBeginLoc();
@@ -152,17 +109,30 @@ private:
 		return exp;
 	}
 
-	virtual bool VisitCStyleCastExpr(CStyleCastExpr *E) {
-		if(isInHeaderStmt(E)) {
+	// Omit the declarations that are present in the inbuilt header
+	bool isInHeaderDecl(Decl *decl) {
+		auto loc = decl->getLocation();
+		auto floc = context->getFullLoc(loc);
+		if (floc.isInSystemHeader()) return true;
+		auto entry = floc.getFileEntry()->getName();
+		if (entry.endswith(".h") || entry.endswith(".hpp")) {
 			return true;
 		}
-		getCount();
-		//cout << "CSTYLE CAST EXPR " << count << "\n";
-		string RHS = convertExpressionToString(E);
-		//cout << RHS << '\n';
-		return true;
+		return false;
 	}
-    
+
+	// Omit the statements that are present in the inbuilt header
+    bool isInHeaderStmt(Stmt* stmt) {
+		auto loc = stmt->getBeginLoc();
+		auto floc = context->getFullLoc(loc);
+		if (floc.isInSystemHeader()) return true;
+		auto entry = floc.getFileEntry()->getName();
+		if (entry.endswith(".h") || entry.endswith(".hpp")) {
+			return true;
+		}
+		return false;
+	}
+
 	string getVarName(string var){
 		int index = 0;
 		string allow = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789";
@@ -170,10 +140,54 @@ private:
 			index += 1;
 		}
 		string h =  var.substr(0, index);
-		//cout << h << " " << h.size() << "\n";
 		return var.substr(0, index);
 	}
 
+	public:
+	explicit CheckMallocVisitor(ASTContext *context, CompilerInstance& instance): 
+			context(context), instance(instance), d(instance.getDiagnostics()) {
+	
+		noCheck = d.getCustomDiagID(DiagnosticsEngine::Warning,
+				"Pointer not checked for null return from malloc : '%0'");
+		
+		notInIf = d.getCustomDiagID(DiagnosticsEngine::Warning,
+				"Pointer assignment not done in if block : '%0'");
+	}
+
+
+	/**
+	 * In a declaration statement, get the variable name and assign it to the 
+	 * global counter
+	 */
+	virtual bool VisitDeclStmt(DeclStmt *s) {
+		if (isInHeaderStmt(s)) {
+			return true;
+		}
+		getCount();
+		for (auto decl : s->decls()) {
+			if (auto var = dyn_cast<VarDecl>(decl)) {
+				varCountMap[var->getNameAsString()] = count;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * For a pointer or cast expression, convert the expression to string
+	 */
+	virtual bool VisitCStyleCastExpr(CStyleCastExpr *E) {
+		if(isInHeaderStmt(E)) {
+			return true;
+		}
+		getCount();
+		string expr = convertExpressionToString(E);
+		return true;
+	}
+    
+	/**
+	 * Apart from an assignment, any other statement with =, 
+	 * is considered as a binary operator
+	 */
     virtual bool VisitBinaryOperator(BinaryOperator *s) {
 		if(isInHeaderStmt(s)){
             return true;
@@ -191,36 +205,35 @@ private:
 			auto loc = context->getFullLoc(s->getExprLoc());
 			string s1 = s->getExprLoc().printToString(context->getSourceManager());
 			int assignmentPos = getCol(s1);
+			// if malloc is present on the RHS, it is the case of an assignment to malloc
 			if (RHS.find("malloc") != std::string::npos) {
-				mallocVars[LHS] = 0;
+				mallocVars[LHS] = 0; // indicating it is a malloc var, and is found
 				return true;
 			}
-			 
+
+			//if malloc is not on the RHS, it means it is an assignment to a value 
 			// check if it is done here, the checking, i.e this is where the assignment and checking happens
 			if(mallocVars.find(LHS) != mallocVars.end()){ // && ifVars[LHS].first <= s1 <= ifVars[LHS].second)
 				 //There is no if check -> being used
 				//cout << "DEBUG	 in malloc vars " << LHS << " " << mallocVars[LHS] << "\n"; 
 				if(mallocVars[LHS] == 0){
+					// indicating that it is a malloc var, and no check has been performed
 					d.Report(loc, noCheck) << LHS; 
 					return true;
 				}
 				else if (mallocVars[LHS] == 1){
+					// if there is an if block associated to the variable, check if the assignment is within the if block
 					if(mallocIfs.find(LHS) != mallocIfs.end()){
 						if(mallocIfs[LHS].first <= assignmentPos && assignmentPos <= mallocIfs[LHS].second){
-							mallocVars[LHS] = 2;
+							mallocVars[LHS] = 2; // check done in the if block, no error
 							return true;
 						}
 						else if(mallocIfs[LHS].first > assignmentPos || assignmentPos >  mallocIfs[LHS].second){
-							d.Report(loc, notInIf) << LHS;
+							d.Report(loc, notInIf) << LHS; // there is an if, but the malloc is outside the if
 							return true;
 						}
 					}
 				}
-					
-						//set it to 2  or fine 
-						// if within the range and previous is 1, then fine
-						// if previous is 0 then no if, raise not checked error
-						 //if not within range raise not assigned in if block 
 					
 				}
 			} 
@@ -228,21 +241,19 @@ private:
 		return true;
 	}
 
+	/**
+	 * For every if statement, the expression is checked, if it is an inequality check 
+	 * for malloc, then the start and end position of the if block is recorded
+	 */
     virtual bool VisitIfStmt(IfStmt *s) {
         if(isInHeaderStmt(s)){
             return true;
         }
-
-		//cout << "***************** IN THE IF STMT ********************** " << "count is : ";
 		getCount();
 		pair<int, int> pos;
 		string ifstmt = convertExpressionToString(s->getCond());
 		string start = s->getBeginLoc().printToString(context->getSourceManager());
 		string end = s->getEndLoc().printToString(context->getSourceManager());
-
-		//cout << "START " << start << " END " << end << " \n";
-		//cout << "IF STMT " << ifstmt << "\n";
-
 		int startPos = getCol(start);
 		int endPos = getCol(end);
 		for(auto x : s->children()){	
@@ -251,9 +262,11 @@ private:
 				string LHS = getVarName(removePointer(convertExpressionToString(b->getLHS())));
 				string RHS = removePointer(convertExpressionToString(b->getRHS()));
 				if(b->isEqualityOp() && mallocVars.find(LHS) != mallocVars.end() && RHS == "nullptr"){
-					//cout << "START POS " << startPos << " END POS " << endPos << "\n";
+					// indicating that an if block performing check against null ptr is present, set value to 1 in mallocVars
 					mallocVars[LHS] = 1;
 					pos = make_pair(startPos, endPos); 
+
+					// record the start and end location of the if block
 					mallocIfs[LHS] = pos;
 				}
 			}
@@ -304,3 +317,8 @@ protected:
 };
 
 static FrontendPluginRegistry::Add<CheckMallocAction> CheckMalloc("CheckMalloc", "Warn against unchecked usage of return from malloc");
+
+//set it to 2  or fine 
+// if within the range and previous is 1, then fine
+// if previous is 0 then no if, raise not checked error
+//if not within range raise not assigned in if block 
